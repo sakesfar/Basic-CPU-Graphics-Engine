@@ -1,0 +1,85 @@
+#pragma once
+#include "geometry.h"
+#include <vector>
+#include <memory>
+
+namespace CameraConstants
+{
+	constexpr uint32_t imageWidth = 640;
+	constexpr uint32_t imageHeight = 480;
+
+	constexpr float inchToMm = 25.4;
+
+	constexpr float filmW = 0.980 * inchToMm;
+	constexpr float filmH = 0.735 * inchToMm;
+	constexpr float focalL = 20;
+
+
+	constexpr float farClipping = 100;
+	constexpr float nearClipping = 1;
+
+	constexpr float filmAspectRatio = filmW / filmH;
+	constexpr float deviceAspectRatio = imageWidth / (float)imageHeight;
+
+
+
+};
+
+
+class Rasterizer
+{
+private:
+
+	struct CanvasSettings
+	{
+		float canvasW ;
+		float canvasH ;
+
+		float r ;
+		float l;
+		float t ;
+		float b;
+		
+	};
+
+	CanvasSettings m_canvSet;
+	Matrix44f m_camera;
+	Matrix44f m_world;
+	Matrix44f m_openGlProjM;
+	std::vector<float> m_zBuffer;	
+	std::vector<Vec3<unsigned char>> m_frameBuffer;
+
+	void setCamera();
+	void setOpenGLProjM();
+
+	
+
+public:
+	explicit Rasterizer(const Matrix44f& cam = Matrix44f{}) ;
+
+	Vec3f objToWorld(const Vec3f& vObj);
+	Vec3f worldToCam(const Vec3f& vWorld);
+	Vec3f camToScreen(const Vec3f& vCam);
+	Vec3f screenToNDC(const Vec3f& vScreen);
+	Vec3f vToRaster(const Vec3f& vWorld);
+
+	Vec3f vToNDCOpengl(const Vec3f& vWorld);
+
+
+
+	float edge(const Vec3f& v0, const Vec3f& v1, const Vec3f& v3);
+	float max3(const float& a, const float& b, const float& c);
+	float min3(const float& a, const float& b, const float& c);
+	
+	bool isvScreenVisible(const Vec3f& vScreen);
+
+	void render(uint32_t numTris, std::vector<uint32_t>& nverts, std::vector<Vec3f>& vertices);
+	void openGLrender(uint32_t numTris, std::vector<uint32_t>& nverts, std::vector<Vec3f>& vertices);
+
+	std::vector<Vec3<unsigned char>> getFrameBuffer() const;
+
+	
+
+
+};
+
