@@ -1,7 +1,6 @@
 **This project is inspired by https://www.scratchapixel.com/. And so far, the project is not unique from their outcome. Yet, I am doing my best**
 
-This project is currenyly under development. 
-The project is going take a considerable time.
+This project is currenyly under development and going take a considerable time.
 
 The idea is to create a simple 3D engine which will be able to project 3D world in real time.
 The calucation will be in CPU. Very likely will be using Qt GUI.
