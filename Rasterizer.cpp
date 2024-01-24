@@ -5,12 +5,11 @@ using namespace CameraConstants;
 
  Rasterizer::Rasterizer(const Matrix44f& cam ) :m_camera{cam}
 {
-	
-
 	setCamera();
 	m_openGlProjM = Matrix44f{};
 	setOpenGLProjM();
 
+	m_bndbox = BoundingBox{};
 	m_world = Matrix44f(1.624241, 0, 2.522269, 0, 0, 3, 0, 0, -2.522269, 0, 1.624241, 0, 0, 0, 0, 1);
 	
 	m_zBuffer = std::vector<float>(imageWidth * imageHeight);
@@ -126,28 +125,77 @@ Vec3f Rasterizer::vToRaster(const Vec3f& vWorld)
 
 }
 
-Vec3f Rasterizer::vToNDCOpengl(const Vec3f& vWorld)
+bool Rasterizer::triangleInScreen(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2 )
+{	
+	m_bndbox.xmin = min3(v0.x, v1.x, v2.x);
+	m_bndbox.ymin = min3(v0.y, v1.y, v2.y);
+	m_bndbox.xmax = max3(v0.x, v1.x, v2.x);
+	m_bndbox.ymax = max3(v0.y, v1.y, v2.y);
+
+	// if the triangle is out of screen, then skip
+	if (m_bndbox.xmin > imageWidth - 1 || m_bndbox.xmax < 0 || m_bndbox.ymin > imageHeight - 1 || m_bndbox.ymax < 0) return false;
+
+	return true;
+	
+}
+
+void Rasterizer::buildFrameBuffer(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2)
 {
-	Vec3f out;
-	out.x = vWorld.x * m_openGlProjM[0][0] + vWorld.y * m_openGlProjM[1][0] + vWorld.z * m_openGlProjM[2][0] + /* in.z = 1 */ m_openGlProjM[3][0];
-	out.y = vWorld.x * m_openGlProjM[0][1] + vWorld.y * m_openGlProjM[1][1] + vWorld.z * m_openGlProjM[2][1] + /* in.z = 1 */ m_openGlProjM[3][1];
-	out.z = vWorld.x * m_openGlProjM[0][2] + vWorld.y * m_openGlProjM[1][2] + vWorld.z * m_openGlProjM[2][2] + /* in.z = 1 */ m_openGlProjM[3][2];
-	float w = vWorld.x * m_openGlProjM[0][3] + vWorld.y * m_openGlProjM[1][3] + vWorld.z * m_openGlProjM[2][3] + /* in.z = 1 */ m_openGlProjM[3][3];
+	uint32_t x0 = std::max(int32_t(0), (int32_t)(std::floor(m_bndbox.xmin)));
+	uint32_t x1 = std::min(int32_t(imageWidth) - 1, (int32_t)(std::floor(m_bndbox.xmax)));
+	uint32_t y0 = std::max(int32_t(0), (int32_t)(std::floor(m_bndbox.ymin)));
+	uint32_t y1 = std::min(int32_t(imageHeight) - 1, (int32_t)(std::floor(m_bndbox.ymax)));
 
-	if (w != 1) 
+	//loop over the pixels going through the bounding box
+
+	float area = edge(v0, v1, v2);
+
+	for (uint32_t i = y0; i < y1; ++i)
 	{
-		out.x /= w;		out.y /= w;		out.z /= w;
+		for (uint32_t j = x0; j < x1; ++j)
+		{
+			Vec3f p = { j + 0.5f, i + 0.5f,0.0f };
+			float w0 = edge(v1, v2, p);
+			float w1 = edge(v2, v0, p);
+			float w2 = edge(v0, v1, p);
+
+
+			if (w0 >= 0 && w1 >= 0 && w2 >= 0)
+			{
+				w0 /= area;
+				w1 /= area;
+				w2 /= area;
+
+				float invertedZ = v0.z * w0 + v1.z * w1 + v2.z * w2;
+				float z = 1 / invertedZ;
+
+				if (m_zBuffer[i * imageWidth + j] > z)
+				{
+					m_zBuffer[i * imageWidth + j] = z;
+					m_frameBuffer[i * imageWidth + j].x = 0;
+					m_frameBuffer[i * imageWidth + j].y = 120;
+					m_frameBuffer[i * imageWidth + j].z = 0;
+
+				}
+			}
+
+		}
 	}
+}
 
-	return out;
-
+void Rasterizer::vToRasterOpenGL(Vec3f& v)
+{
+	v = worldToCam(v);
+	m_openGlProjM.multVecMatrix(v, v);
+	v.x= (v.x + 1) / 2 * imageWidth;
+	v.y = (1 - v.y) / 2 * imageHeight;
+	v.z = -v.z;
 }
 
 float Rasterizer::edge(const Vec3f& v0, const Vec3f& v1, const Vec3f& p)
 {
 	// the p is inside of the triangle if cross product,  " p X v0-v1 >= 0 "
 	//we see it as positive when the resulting vec points towards us
-
 	return (p[0] - v0[0]) * (v1[1] - v0[1]) - (v1[0] - v0[0])*(p[1] - v0[1]) ;
 }
 
@@ -178,57 +226,8 @@ void Rasterizer::render(uint32_t numTris, std::vector<uint32_t>& nverts, std::ve
 		vRaster1.z = 1 / vRaster1.z;
 		vRaster2.z = 1 / vRaster2.z;
 
-
-		float xmin = min3(vRaster0.x, vRaster1.x, vRaster2.x);
-		float ymin = min3(vRaster0.y, vRaster1.y, vRaster2.y);
-		float xmax = max3(vRaster0.x, vRaster1.x, vRaster2.x);
-		float ymax = max3(vRaster0.y, vRaster1.y, vRaster2.y);	
-		
-		// if the triangle is out of screen, then skip
-		if (xmin > imageWidth - 1 || xmax < 0 || ymin > imageHeight - 1 || ymax < 0) continue;
-
-		uint32_t x0 = std::max(int32_t(0), (int32_t)(std::floor(xmin)));
-		uint32_t x1 = std::min(int32_t(imageWidth) - 1, (int32_t)(std::floor(xmax)));
-		uint32_t y0 = std::max(int32_t(0), (int32_t)(std::floor(ymin)));
-		uint32_t y1 = std::min(int32_t(imageHeight) - 1, (int32_t)(std::floor(ymax)));
-
-		//loop over the pixels going through the bounding box
-
-		float area = edge(vRaster0, vRaster1, vRaster2);
-
-		for (uint32_t  i = y0; i < y1; ++i)
-		{
-			for (uint32_t  j = x0; j < x1; ++j)
-			{
-				Vec3f p = { j + 0.5f, i + 0.5f,0.0f };
-				float w0 = edge(vRaster1, vRaster2, p);
-				float w1 = edge(vRaster2, vRaster0, p);
-				float w2 = edge(vRaster0, vRaster1, p);
-				
-
-				if (w0 >= 0 && w1 >= 0 && w2 >= 0)
-				{
-					w0 /= area;
-					w1 /= area;
-					w2 /= area;					
-
-					float invertedZ = vRaster0.z * w0 + vRaster1.z * w1 + vRaster2.z * w2;
-					float z = 1 / invertedZ;
-
-					if (m_zBuffer[i * imageWidth + j] > z)
-					{	
-						m_zBuffer[i * imageWidth + j] = z;
-						m_frameBuffer[i * imageWidth + j].x = 0;
-						m_frameBuffer[i * imageWidth + j].y = 120;
-						m_frameBuffer[i * imageWidth + j].z = 0;		
-										
-					}
-				}
-
-			}
-		}
-
-		
+		if (triangleInScreen(vRaster0, vRaster1, vRaster2))
+			buildFrameBuffer(vRaster0, vRaster1, vRaster2);			
 
 	}
 }
@@ -237,14 +236,24 @@ void Rasterizer::openGLrender(uint32_t numTris, std::vector<uint32_t>& nverts, s
 {
 	for (int i = 0; i < numTris; ++i)
 	{
-		Vec3f vWorld0 = vertices[nverts[i * 3]];
-		Vec3f vWorld1 = vertices[nverts[i * 3 + 1]];
-		Vec3f vWorld2 = vertices[nverts[i * 3 + 2]];
+		Vec3f vRaster0 = vertices[nverts[i * 3]];
+		Vec3f vRaster1 = vertices[nverts[i * 3 + 1]];
+		Vec3f vRaster2 = vertices[nverts[i * 3 + 2]];
+
+		vToRasterOpenGL(vRaster0);
+		vToRasterOpenGL(vRaster1);
+		vToRasterOpenGL(vRaster2);
+
+		vRaster0.z = 1 / vRaster0.z;
+		vRaster1.z = 1 / vRaster1.z;
+		vRaster2.z = 1 / vRaster2.z;
+
+		if (triangleInScreen(vRaster0, vRaster1, vRaster2)) 		
+			buildFrameBuffer(vRaster0, vRaster1, vRaster2);		
 
 
 	}
 }
-
 
 
 std::vector<Vec3<unsigned char>> Rasterizer::getFrameBuffer() const
