@@ -2,8 +2,8 @@
 
 This project is currenyly under development and going take a considerable time.
 
-The idea is to create a simple 3D engine which will be able to project 3D world in real time.
-The calucation will be in CPU. Very likely will be using Qt GUI.
+The idea is to create a simple 3D engine which will be able to render a 3D object in real-time.
+The calculation will be in CPU. Very likely will be using Qt GUI.
 
 So far, the project is in a raw format. 
 However:
