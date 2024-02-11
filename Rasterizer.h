@@ -1,7 +1,7 @@
 #pragma once
-#include "geometry.h"
 #include <vector>
 #include <memory>
+#include "CameraConstants.h"
 
 struct BoundingBox
 {
