@@ -18,7 +18,6 @@ using namespace CameraConstants;
 	
 	for (int i = 0; i < imageHeight * imageWidth;++i)	
 		m_zBuffer[i] = farClipping;
-
 	
 }
 
@@ -50,7 +49,6 @@ using namespace CameraConstants;
 	 m_canvSet.b = -m_canvSet.t;
 	 m_canvSet.l = -m_canvSet.r;
 
-
  }
 
  void Rasterizer::setOpenGLProjM()
@@ -62,7 +60,6 @@ using namespace CameraConstants;
 	 m_openGlProjM[2][2] = -(CameraConstants::farClipping + CameraConstants::nearClipping) / (CameraConstants::farClipping - CameraConstants::nearClipping);
 	 m_openGlProjM[2][3] = -1;
 	 m_openGlProjM[3][3] = 0;
-
  }
 
  Vec3f Rasterizer::objToWorld(const Vec3f& vObj)
@@ -70,7 +67,6 @@ using namespace CameraConstants;
 	 Vec3f vWorld;
 	 m_world.multVecMatrix(vObj, vWorld);
 	 return vWorld;
-
  }
 
 Vec3f Rasterizer::worldToCam(const Vec3f& vWorld)
@@ -178,7 +174,6 @@ void Rasterizer::buildFrameBuffer(const Vec3f& v0, const Vec3f& v1, const Vec3f&
 
 				}
 			}
-
 		}
 	}
 }
@@ -249,8 +244,7 @@ void Rasterizer::openGLrender(uint32_t numTris, std::vector<uint32_t>& nverts, s
 		vRaster2.z = 1 / vRaster2.z;
 
 		if (triangleInScreen(vRaster0, vRaster1, vRaster2)) 		
-			buildFrameBuffer(vRaster0, vRaster1, vRaster2);		
-
+			buildFrameBuffer(vRaster0, vRaster1, vRaster2);	
 
 	}
 }
